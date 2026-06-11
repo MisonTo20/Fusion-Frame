@@ -340,11 +340,9 @@ def main():
                 "duration": meta["duration"],
             }
             state["source_path"] = meta.get("source_path", "")
-            dpg.set_value("clip_label", f"Clip: {meta.get('clip_name')} | Start: {meta.get('start_frame')} | Duration: {meta.get('duration')}")
             dpg.set_value("source_input", meta.get("source_path", ""))
             log(f"Grabbed clip: {meta.get('clip_name')} from Resolve")
         else:
-            dpg.set_value("clip_label", f"Error: {meta.get('error')}")
             log(f"Failed to grab clip: {meta.get('error')}")
 
     def load_from_resolve():
@@ -471,27 +469,54 @@ def main():
 
     # ========== BUILD UI ==========
     dpg.create_context()
-    dpg.create_viewport(title="Fusion Frame (FFrame)", width=620, height=640, x_pos=100, y_pos=50)
+
+    with dpg.theme() as theme:
+        with dpg.theme_component(dpg.mvAll):
+            dpg.add_theme_color(dpg.mvThemeCol_WindowBg, (30, 30, 30))
+            dpg.add_theme_color(dpg.mvThemeCol_ChildBg, (36, 36, 36))
+            dpg.add_theme_color(dpg.mvThemeCol_FrameBg, (44, 44, 44))
+            dpg.add_theme_color(dpg.mvThemeCol_FrameBgHovered, (56, 56, 56))
+            dpg.add_theme_color(dpg.mvThemeCol_FrameBgActive, (66, 66, 66))
+            dpg.add_theme_color(dpg.mvThemeCol_TitleBg, (25, 25, 25))
+            dpg.add_theme_color(dpg.mvThemeCol_TitleBgActive, (30, 30, 30))
+            dpg.add_theme_color(dpg.mvThemeCol_TitleBgCollapsed, (20, 20, 20))
+            dpg.add_theme_color(dpg.mvThemeCol_Button, (204, 85, 0))
+            dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, (230, 110, 20))
+            dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, (180, 70, 0))
+            dpg.add_theme_color(dpg.mvThemeCol_Header, (44, 44, 44))
+            dpg.add_theme_color(dpg.mvThemeCol_HeaderHovered, (204, 85, 0))
+            dpg.add_theme_color(dpg.mvThemeCol_HeaderActive, (180, 70, 0))
+            dpg.add_theme_color(dpg.mvThemeCol_Text, (210, 210, 210))
+            dpg.add_theme_color(dpg.mvThemeCol_TextSelectedBg, (204, 85, 0))
+            dpg.add_theme_color(dpg.mvThemeCol_CheckMark, (204, 85, 0))
+            dpg.add_theme_color(dpg.mvThemeCol_SliderGrab, (204, 85, 0))
+            dpg.add_theme_color(dpg.mvThemeCol_SliderGrabActive, (230, 110, 20))
+            dpg.add_theme_color(dpg.mvThemeCol_ScrollbarBg, (36, 36, 36))
+            dpg.add_theme_color(dpg.mvThemeCol_ScrollbarGrab, (80, 80, 80))
+            dpg.add_theme_color(dpg.mvThemeCol_Border, (55, 55, 55))
+            dpg.add_theme_color(dpg.mvThemeCol_MenuBarBg, (30, 30, 30))
+    dpg.bind_theme(theme)
+
+    dpg.create_viewport(title="Fusion Frame", width=620, height=640, x_pos=100, y_pos=50)
     dpg.setup_dearpygui()
 
-    with dpg.window(tag="main_win", label="Fusion Frame (FFrame)", no_close=True, no_collapse=True):
+    with dpg.window(tag="main_win", label="Fusion Frame", no_close=True, no_collapse=True):
         with dpg.group(horizontal=True):
             dpg.add_button(label="Grab Clip", callback=lambda: load_from_resolve())
-            dpg.add_text(tag="clip_label", default_value="Click 'Grab Clip' to connect...", color=[180, 180, 180])
-            dpg.add_input_text(tag="source_input", readonly=True, default_value="", width=-1)
+            dpg.add_input_text(tag="source_input", label="Source Path", default_value="", width=-1, callback=lambda s, a: state.update({"source_path": a}))
 
         with dpg.child_window(height=-60, autosize_x=True, no_scrollbar=True):
             with dpg.collapsing_header(label="Upscale", default_open=False):
                 dpg.add_checkbox(tag="upscale", label="Enable Upscale", default_value=False, callback=lambda s, a: state.update({"upscale": a}))
-                dpg.add_combo(tag="upscale_method", label="Method", items=["shufflecugan","adore","fallin_soft","fallin_strong","span","open-proteus","aniscale2","rtmosr","saryn","gauss","animesr"], default_value="shufflecugan", callback=lambda s, a: state.update({"upscale_method": a}))
-                dpg.add_drag_int(tag="upscale_factor", label="Factor", default_value=2, min_value=2, max_value=4, callback=lambda s, a: state.update({"upscale_factor": a}))
+                dpg.add_combo(tag="upscale_method", label="Method", items=["shufflecugan","adore","fallin_soft","fallin_strong","span","open-proteus","aniscale2","rtmosr","saryn","gauss","animesr"], default_value="shufflecugan", width=200, callback=lambda s, a: state.update({"upscale_method": a}))
+                dpg.add_drag_int(tag="upscale_factor", label="Factor", default_value=2, min_value=2, max_value=4, width=200, callback=lambda s, a: state.update({"upscale_factor": a}))
                 dpg.add_checkbox(tag="custom_model", label="Custom Model", default_value=False, callback=lambda s, a: state.update({"custom_model": a}))
-                dpg.add_input_text(tag="custom_model_path", label="Model Path", default_value="", callback=lambda s, a: state.update({"custom_model_path": a}))
+                dpg.add_input_text(tag="custom_model_path", label="Model Path", default_value="", width=200, callback=lambda s, a: state.update({"custom_model_path": a}))
 
             with dpg.collapsing_header(label="Interpolate", default_open=False):
                 dpg.add_checkbox(tag="interpolate", label="Enable Interpolation", default_value=False, callback=lambda s, a: state.update({"interpolate": a}))
-                dpg.add_combo(tag="interpolate_method", label="Method", items=["rife4.6","rife4.22","rife4.25","rife4.25-lite","rife4.25-heavy","gmfss"], default_value="rife4.6", callback=lambda s, a: state.update({"interpolate_method": a}))
-                dpg.add_drag_float(tag="interpolate_factor", label="Factor", default_value=2.0, min_value=1.0, max_value=4.0, speed=0.1, callback=lambda s, a: state.update({"interpolate_factor": a}))
+                dpg.add_combo(tag="interpolate_method", label="Method", items=["rife4.6","rife4.22","rife4.25","rife4.25-lite","rife4.25-heavy","gmfss"], default_value="rife4.6", width=200, callback=lambda s, a: state.update({"interpolate_method": a}))
+                dpg.add_drag_float(tag="interpolate_factor", label="Factor", default_value=2.0, min_value=1.0, max_value=4.0, speed=0.1, width=200, callback=lambda s, a: state.update({"interpolate_factor": a}))
                 dpg.add_checkbox(tag="ensemble", label="Ensemble", default_value=False, callback=lambda s, a: state.update({"ensemble": a}))
                 dpg.add_checkbox(tag="dynamic_scale", label="Dynamic Scale", default_value=False, callback=lambda s, a: state.update({"dynamic_scale": a}))
                 dpg.add_checkbox(tag="slowmo", label="Slow Motion", default_value=False, callback=lambda s, a: state.update({"slowmo": a}))
@@ -500,56 +525,56 @@ def main():
 
             with dpg.collapsing_header(label="Restore", default_open=False):
                 dpg.add_checkbox(tag="restore", label="Enable Restore", default_value=False, callback=lambda s, a: state.update({"restore": a}))
-                dpg.add_combo(tag="restore_method", label="Method", items=["scunet","nafnet","dpir","real-plksr","anime1080fixer","fastlinedarken","autocas","gater3","deh264_real","deh264_span","hurrdeblur"], default_value="anime1080fixer", callback=lambda s, a: state.update({"restore_method": a}))
+                dpg.add_combo(tag="restore_method", label="Method", items=["scunet","nafnet","dpir","real-plksr","anime1080fixer","fastlinedarken","autocas","gater3","deh264_real","deh264_span","hurrdeblur"], default_value="anime1080fixer", width=200, callback=lambda s, a: state.update({"restore_method": a}))
                 dpg.add_checkbox(tag="stabilize", label="Stabilize", default_value=False, callback=lambda s, a: state.update({"stabilize": a}))
 
             with dpg.collapsing_header(label="Deduplication", default_open=False):
                 dpg.add_checkbox(tag="dedup", label="Enable Deduplication", default_value=False, callback=lambda s, a: state.update({"dedup": a}))
-                dpg.add_combo(tag="dedup_method", label="Method", items=["ssim","ssim-cuda","mse","mse-cuda","flownets","vmaf","vmaf-cuda"], default_value="ssim", callback=lambda s, a: state.update({"dedup_method": a}))
-                dpg.add_drag_int(tag="dedup_sens", label="Sensitivity", default_value=35, min_value=0, max_value=100, callback=lambda s, a: state.update({"dedup_sens": a}))
+                dpg.add_combo(tag="dedup_method", label="Method", items=["ssim","ssim-cuda","mse","mse-cuda","flownets","vmaf","vmaf-cuda"], default_value="ssim", width=200, callback=lambda s, a: state.update({"dedup_method": a}))
+                dpg.add_drag_int(tag="dedup_sens", label="Sensitivity", default_value=35, min_value=0, max_value=100, width=200, callback=lambda s, a: state.update({"dedup_sens": a}))
 
             with dpg.collapsing_header(label="Segmentation", default_open=False):
                 dpg.add_checkbox(tag="segment", label="Enable Segmentation", default_value=False, callback=lambda s, a: state.update({"segment": a}))
-                dpg.add_combo(tag="segment_method", label="Method", items=["anime","anime-tensorrt"], default_value="anime", callback=lambda s, a: state.update({"segment_method": a}))
+                dpg.add_combo(tag="segment_method", label="Method", items=["anime","anime-tensorrt"], default_value="anime", width=200, callback=lambda s, a: state.update({"segment_method": a}))
 
             with dpg.collapsing_header(label="Depth", default_open=False):
                 dpg.add_checkbox(tag="depth", label="Enable Depth", default_value=False, callback=lambda s, a: state.update({"depth": a}))
-                dpg.add_combo(tag="depth_method", label="Method", items=["small_v2","base_v2","large_v2","giant_v2","distill_small_v2","distill_base_v2","distill_large_v2","og_small_v2","og_base_v2","og_large_v2","og_large_v3"], default_value="small_v2", callback=lambda s, a: state.update({"depth_method": a}))
-                dpg.add_combo(tag="depth_quality", label="Quality", items=["low","medium","high"], default_value="low", callback=lambda s, a: state.update({"depth_quality": a}))
+                dpg.add_combo(tag="depth_method", label="Method", items=["small_v2","base_v2","large_v2","giant_v2","distill_small_v2","distill_base_v2","distill_large_v2","og_small_v2","og_base_v2","og_large_v2","og_large_v3"], default_value="small_v2", width=200, callback=lambda s, a: state.update({"depth_method": a}))
+                dpg.add_combo(tag="depth_quality", label="Quality", items=["low","medium","high"], default_value="low", width=200, callback=lambda s, a: state.update({"depth_quality": a}))
                 dpg.add_checkbox(tag="depth_norm", label="Depth Norm", default_value=False, callback=lambda s, a: state.update({"depth_norm": a}))
 
             with dpg.collapsing_header(label="Object Detection", default_open=False):
                 dpg.add_checkbox(tag="obj_detect", label="Enable Object Detection", default_value=False, callback=lambda s, a: state.update({"obj_detect": a}))
-                dpg.add_combo(tag="obj_detect_method", label="Method", items=["yolov9_small-directml","yolov9_medium-directml","yolov9_large-directml"], default_value="yolov9_small-directml", callback=lambda s, a: state.update({"obj_detect_method": a}))
+                dpg.add_combo(tag="obj_detect_method", label="Method", items=["yolov9_small-directml","yolov9_medium-directml","yolov9_large-directml"], default_value="yolov9_small-directml", width=200, callback=lambda s, a: state.update({"obj_detect_method": a}))
 
             with dpg.collapsing_header(label="Auto Clip Detection", default_open=False):
                 dpg.add_checkbox(tag="autoclip", label="Enable Auto Clip", default_value=False, callback=lambda s, a: state.update({"autoclip": a}))
-                dpg.add_drag_float(tag="autoclip_sens", label="Sensitivity", default_value=50.0, min_value=0.0, max_value=100.0, speed=1.0, callback=lambda s, a: state.update({"autoclip_sens": a}))
+                dpg.add_drag_float(tag="autoclip_sens", label="Sensitivity", default_value=50.0, min_value=0.0, max_value=100.0, speed=1.0, width=200, callback=lambda s, a: state.update({"autoclip_sens": a}))
 
             with dpg.collapsing_header(label="Export & Encoding", default_open=True):
                 dpg.add_checkbox(tag="resize", label="Resize", default_value=False, callback=lambda s, a: state.update({"resize": a}))
-                dpg.add_drag_float(tag="resize_factor", label="Resize Factor", default_value=2.0, min_value=0.1, max_value=10.0, speed=0.1, callback=lambda s, a: state.update({"resize_factor": a}))
-                dpg.add_input_text(tag="output_scale", label="Output Scale (e.g. 3840x2160)", default_value="", callback=lambda s, a: state.update({"output_scale": a}))
-                dpg.add_combo(tag="encode_method", label="Encode Method", items=["x264","x264_animation","x264_animation_10bit","x264_10bit","x265","x265_10bit","av1","nvenc_h264","nvenc_h265","nvenc_h265_10bit","nvenc_av1","qsv_h264","qsv_h265","qsv_h265_10bit","qsv_vp9","h264_amf","hevc_amf","hevc_amf_10bit","slow_x264","slow_nvenc_h264","slow_x265","slow_nvenc_h265","slow_av1","slow_nvenc_av1","prores","prores_segment","gif","png","vp9","lossless","lossless_nvenc"], default_value="x264", callback=lambda s, a: state.update({"encode_method": a}))
-                dpg.add_input_text(tag="custom_encoder", label="Custom Encoder", default_value="", callback=lambda s, a: state.update({"custom_encoder": a}))
+                dpg.add_drag_float(tag="resize_factor", label="Resize Factor", default_value=2.0, min_value=0.1, max_value=10.0, speed=0.1, width=200, callback=lambda s, a: state.update({"resize_factor": a}))
+                dpg.add_input_text(tag="output_scale", label="Output Scale (e.g. 3840x2160)", default_value="", width=200, callback=lambda s, a: state.update({"output_scale": a}))
+                dpg.add_combo(tag="encode_method", label="Encode Method", items=["x264","x264_animation","x264_animation_10bit","x264_10bit","x265","x265_10bit","av1","nvenc_h264","nvenc_h265","nvenc_h265_10bit","nvenc_av1","qsv_h264","qsv_h265","qsv_h265_10bit","qsv_vp9","h264_amf","hevc_amf","hevc_amf_10bit","slow_x264","slow_nvenc_h264","slow_x265","slow_nvenc_h265","slow_av1","slow_nvenc_av1","prores","prores_segment","gif","png","vp9","lossless","lossless_nvenc"], default_value="x264", width=200, callback=lambda s, a: state.update({"encode_method": a}))
+                dpg.add_input_text(tag="custom_encoder", label="Custom Encoder", default_value="", width=200, callback=lambda s, a: state.update({"custom_encoder": a}))
 
             with dpg.collapsing_header(label="Advanced", default_open=False):
                 dpg.add_checkbox(tag="half", label="Half precision", default_value=True, callback=lambda s, a: state.update({"half": a}))
                 dpg.add_checkbox(tag="static", label="Static mode", default_value=False, callback=lambda s, a: state.update({"static": a}))
-                dpg.add_combo(tag="compile_mode", label="Compile mode", items=["default","max","max-graphs"], default_value="default", callback=lambda s, a: state.update({"compile_mode": a}))
-                dpg.add_combo(tag="download_req", label="Download reqs", items=["none","windows-cuda","windows-lite","linux-cuda","linux-lite"], default_value="none", callback=lambda s, a: state.update({"download_req": a}))
+                dpg.add_combo(tag="compile_mode", label="Compile mode", items=["default","max","max-graphs"], default_value="default", width=200, callback=lambda s, a: state.update({"compile_mode": a}))
+                dpg.add_combo(tag="download_req", label="Download reqs", items=["none","windows-cuda","windows-lite","linux-cuda","linux-lite"], default_value="none", width=200, callback=lambda s, a: state.update({"download_req": a}))
                 dpg.add_checkbox(tag="cleanup", label="Cleanup", default_value=False, callback=lambda s, a: state.update({"cleanup": a}))
-                dpg.add_combo(tag="bit_depth", label="Bit depth", items=["8bit","16bit"], default_value="8bit", callback=lambda s, a: state.update({"bit_depth": a}))
+                dpg.add_combo(tag="bit_depth", label="Bit depth", items=["8bit","16bit"], default_value="8bit", width=200, callback=lambda s, a: state.update({"bit_depth": a}))
                 dpg.add_checkbox(tag="benchmark", label="Benchmark", default_value=False, callback=lambda s, a: state.update({"benchmark": a}))
                 dpg.add_checkbox(tag="preview", label="Preview", default_value=False, callback=lambda s, a: state.update({"preview": a}))
                 dpg.add_checkbox(tag="ae_enable", label="Enable AE", default_value=False, callback=lambda s, a: state.update({"ae_enable": a}))
-                dpg.add_input_text(tag="ae_host", label="AE Host", default_value="127.0.0.1:PORT", callback=lambda s, a: state.update({"ae_host": a}))
+                dpg.add_input_text(tag="ae_host", label="AE Host", default_value="127.0.0.1:PORT", width=200, callback=lambda s, a: state.update({"ae_host": a}))
 
         with dpg.group(horizontal=True):
             dpg.add_button(label="Run", width=80, callback=lambda: run_process())
             dpg.add_text(tag="status_text", default_value="Ready", color=[180, 180, 180])
 
-        dpg.add_input_text(tag="log_text", multiline=True, readonly=True, default_value="", height=60)
+        dpg.add_input_text(tag="log_text", multiline=True, readonly=True, default_value="", height=60, width=-1)
 
     dpg.set_primary_window("main_win", True)
     dpg.show_viewport()
