@@ -427,7 +427,7 @@ def main():
             update_status("Error: No source path")
             log("Error: No source path")
             return
-        tas_dir = os.path.dirname(os.path.abspath(__file__))
+        tas_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "TheAnimeScripter")
         out_dir = os.path.join(os.path.dirname(src), "Framer exports")
         os.makedirs(out_dir, exist_ok=True)
         cmd_args = build_command()
@@ -471,17 +471,16 @@ def main():
 
     # ========== BUILD UI ==========
     dpg.create_context()
-    dpg.create_viewport(title="Fusion Frame (FFrame)", width=820, height=720, x_pos=100, y_pos=50)
+    dpg.create_viewport(title="Fusion Frame (FFrame)", width=620, height=640, x_pos=100, y_pos=50)
     dpg.setup_dearpygui()
 
     with dpg.window(tag="main_win", label="Fusion Frame (FFrame)", no_close=True, no_collapse=True):
         with dpg.group(horizontal=True):
-            dpg.add_button(label="Grab Clip From Resolve", callback=lambda: load_from_resolve())
+            dpg.add_button(label="Grab Clip", callback=lambda: load_from_resolve())
             dpg.add_text(tag="clip_label", default_value="Click 'Grab Clip' to connect...", color=[180, 180, 180])
+            dpg.add_input_text(tag="source_input", readonly=True, default_value="", width=-1)
 
-        dpg.add_input_text(tag="source_input", label="Source Path", readonly=True, default_value="")
-
-        with dpg.child_window(height=-60, autosize_x=True):
+        with dpg.child_window(height=-60, autosize_x=True, no_scrollbar=True):
             with dpg.collapsing_header(label="Upscale", default_open=False):
                 dpg.add_checkbox(tag="upscale", label="Enable Upscale", default_value=False, callback=lambda s, a: state.update({"upscale": a}))
                 dpg.add_combo(tag="upscale_method", label="Method", items=["shufflecugan","adore","fallin_soft","fallin_strong","span","open-proteus","aniscale2","rtmosr","saryn","gauss","animesr"], default_value="shufflecugan", callback=lambda s, a: state.update({"upscale_method": a}))
@@ -527,7 +526,6 @@ def main():
                 dpg.add_checkbox(tag="autoclip", label="Enable Auto Clip", default_value=False, callback=lambda s, a: state.update({"autoclip": a}))
                 dpg.add_drag_float(tag="autoclip_sens", label="Sensitivity", default_value=50.0, min_value=0.0, max_value=100.0, speed=1.0, callback=lambda s, a: state.update({"autoclip_sens": a}))
 
-            dpg.add_separator()
             with dpg.collapsing_header(label="Export & Encoding", default_open=True):
                 dpg.add_checkbox(tag="resize", label="Resize", default_value=False, callback=lambda s, a: state.update({"resize": a}))
                 dpg.add_drag_float(tag="resize_factor", label="Resize Factor", default_value=2.0, min_value=0.1, max_value=10.0, speed=0.1, callback=lambda s, a: state.update({"resize_factor": a}))
@@ -535,7 +533,6 @@ def main():
                 dpg.add_combo(tag="encode_method", label="Encode Method", items=["x264","x264_animation","x264_animation_10bit","x264_10bit","x265","x265_10bit","av1","nvenc_h264","nvenc_h265","nvenc_h265_10bit","nvenc_av1","qsv_h264","qsv_h265","qsv_h265_10bit","qsv_vp9","h264_amf","hevc_amf","hevc_amf_10bit","slow_x264","slow_nvenc_h264","slow_x265","slow_nvenc_h265","slow_av1","slow_nvenc_av1","prores","prores_segment","gif","png","vp9","lossless","lossless_nvenc"], default_value="x264", callback=lambda s, a: state.update({"encode_method": a}))
                 dpg.add_input_text(tag="custom_encoder", label="Custom Encoder", default_value="", callback=lambda s, a: state.update({"custom_encoder": a}))
 
-            dpg.add_separator()
             with dpg.collapsing_header(label="Advanced", default_open=False):
                 dpg.add_checkbox(tag="half", label="Half precision", default_value=True, callback=lambda s, a: state.update({"half": a}))
                 dpg.add_checkbox(tag="static", label="Static mode", default_value=False, callback=lambda s, a: state.update({"static": a}))
@@ -548,12 +545,11 @@ def main():
                 dpg.add_checkbox(tag="ae_enable", label="Enable AE", default_value=False, callback=lambda s, a: state.update({"ae_enable": a}))
                 dpg.add_input_text(tag="ae_host", label="AE Host", default_value="127.0.0.1:PORT", callback=lambda s, a: state.update({"ae_host": a}))
 
-        dpg.add_separator()
         with dpg.group(horizontal=True):
-            dpg.add_button(label="Run", callback=lambda: run_process())
+            dpg.add_button(label="Run", width=80, callback=lambda: run_process())
             dpg.add_text(tag="status_text", default_value="Ready", color=[180, 180, 180])
 
-        dpg.add_input_text(tag="log_text", multiline=True, readonly=True, default_value="", height=120)
+        dpg.add_input_text(tag="log_text", multiline=True, readonly=True, default_value="", height=60)
 
     dpg.set_primary_window("main_win", True)
     dpg.show_viewport()
