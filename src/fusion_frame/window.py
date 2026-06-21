@@ -1,4 +1,3 @@
-
 import os
 import subprocess
 import threading
@@ -9,15 +8,79 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QPushButton, QLabel, QLineEdit, QCheckBox, QComboBox, QDoubleSpinBox,
     QSpinBox, QGroupBox, QScrollArea, QPlainTextEdit, QToolBox,
+    QStyleOptionGroupBox, QStyle,
 )
 
 from fusion_frame import core
+
+
+class CollapsibleGroupBox(QGroupBox):
+    """A QGroupBox whose body can be hidden to save vertical space.
+    Clicking the title toggles collapse, independent of the box's own
+    checkable/checked state (which still drives whether the feature is
+    enabled)."""
+
+    def __init__(self, title, start_collapsed=True, parent=None):
+        super().__init__(title, parent)
+        self._collapsed = False
+        self._body_widgets = []
+        self._pending_collapse = start_collapsed
+
+    def register_body(self):
+        """Call once after all child widgets have been added to this
+        group's layout, to capture them for collapse/expand."""
+        layout = self.layout()
+        if layout is not None:
+            for i in range(layout.count()):
+                item = layout.itemAt(i)
+                w = item.widget() if item else None
+                if w is not None:
+                    self._body_widgets.append(w)
+        if self._pending_collapse:
+            self.collapse()
+
+    def collapse(self):
+        self._collapsed = True
+        for w in self._body_widgets:
+            w.setVisible(False)
+        self.setFlat(True)
+
+    def expand(self):
+        self._collapsed = False
+        for w in self._body_widgets:
+            w.setVisible(True)
+        self.setFlat(False)
+
+    def toggle_collapsed(self):
+        self.expand() if self._collapsed else self.collapse()
+
+    def mousePressEvent(self, event):
+        # Only a click inside the checkbox indicator itself toggles the
+        # checked state; any other click on the title row toggles collapse
+        # instead, and clicks below the title row are left to the body
+        # widgets.
+        pos = event.position().toPoint()
+        opt = QStyleOptionGroupBox()
+        self.initStyleOption(opt)
+        style = self.style()
+        checkbox_rect = style.subControlRect(
+            QStyle.ComplexControl.CC_GroupBox, opt, QStyle.SubControl.SC_GroupBoxCheckBox, self
+        )
+
+        if self.isCheckable() and checkbox_rect.contains(pos):
+            super().mousePressEvent(event)
+            return
+
+        title_bottom = max(checkbox_rect.bottom(), 16) + 4
+        if pos.y() <= title_bottom:
+            self.toggle_collapsed()
 
 
 class _Signals(QObject):
     metadata_ready = Signal(dict)
     process_finished = Signal(object)
     import_done = Signal(str, bool)
+    tas_output = Signal(str)
 
 
 class FusionFrameWindow(QMainWindow):
@@ -41,6 +104,7 @@ class FusionFrameWindow(QMainWindow):
         self.signals.metadata_ready.connect(self._on_metadata_ready)
         self.signals.process_finished.connect(self._on_process_finished)
         self.signals.import_done.connect(self._on_import_done)
+        self.signals.tas_output.connect(self._log)
 
         self.state = {
             "upscale": False, "upscale_method": "shufflecugan", "upscale_factor": 2,
@@ -60,7 +124,7 @@ class FusionFrameWindow(QMainWindow):
             "download_req": "none", "cleanup": False, "bit_depth": "8bit",
             "benchmark": False, "preview": False,
             "ae_enable": False, "ae_host": "127.0.0.1:PORT",
-            "add_red": True, "import_on_top": True,
+            "add_red": True, "add_orange": True, "import_on_top": True,
         }
 
         self._build_ui()
@@ -74,7 +138,6 @@ class FusionFrameWindow(QMainWindow):
         self.setCentralWidget(central)
         root = QVBoxLayout(central)
 
-        # ----- top row: grab clip + source path -----
         top_row = QHBoxLayout()
         grab_btn = QPushButton("Grab Clip")
         grab_btn.clicked.connect(self._load_from_resolve)
@@ -85,7 +148,6 @@ class FusionFrameWindow(QMainWindow):
         top_row.addWidget(self.source_input)
         root.addLayout(top_row)
 
-        # ----- scrollable settings area -----
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         container = QWidget()
@@ -105,16 +167,17 @@ class FusionFrameWindow(QMainWindow):
         self._sections.addWidget(self._build_advanced_group())
         self._sections.addStretch(1)
 
-        # ----- run row -----
         run_row = QHBoxLayout()
         run_btn = QPushButton("Run")
         run_btn.clicked.connect(self._run_process)
+        clear_log_btn = QPushButton("Clear Log")
+        clear_log_btn.clicked.connect(self._clear_log)
         self.status_label = QLabel("Ready")
         run_row.addWidget(run_btn)
+        run_row.addWidget(clear_log_btn)
         run_row.addWidget(self.status_label, 1)
         root.addLayout(run_row)
 
-        # ----- log -----
         self.log_box = QPlainTextEdit()
         self.log_box.setReadOnly(True)
         self.log_box.setFixedHeight(110)
@@ -157,7 +220,7 @@ class FusionFrameWindow(QMainWindow):
     # ----- group builders -----
 
     def _build_upscale_group(self):
-        g = QGroupBox("Upscale")
+        g = CollapsibleGroupBox("Upscale")
         g.setCheckable(True)
         g.setChecked(False)
         g.toggled.connect(lambda v: self.state.update({"upscale": v}))
@@ -172,10 +235,11 @@ class FusionFrameWindow(QMainWindow):
         custom_cb = self._checkbox("Custom Model", "custom_model")
         lay.addWidget(custom_cb, 2, 0)
         lay.addWidget(self._line_edit("custom_model_path"), 2, 1)
+        g.register_body()
         return g
 
     def _build_interpolate_group(self):
-        g = QGroupBox("Interpolate")
+        g = CollapsibleGroupBox("Interpolate")
         g.setCheckable(True)
         g.setChecked(False)
         g.toggled.connect(lambda v: self.state.update({"interpolate": v}))
@@ -191,10 +255,11 @@ class FusionFrameWindow(QMainWindow):
         lay.addWidget(self._checkbox("Slow Motion", "slowmo"), 3, 0)
         lay.addWidget(self._checkbox("Static Step", "static_step"), 3, 1)
         lay.addWidget(self._checkbox("Interpolate First", "interpolate_first", True), 4, 0)
+        g.register_body()
         return g
 
     def _build_restore_group(self):
-        g = QGroupBox("Restore")
+        g = CollapsibleGroupBox("Restore")
         g.setCheckable(True)
         g.setChecked(False)
         g.toggled.connect(lambda v: self.state.update({"restore": v}))
@@ -205,10 +270,11 @@ class FusionFrameWindow(QMainWindow):
              "autocas", "gater3", "deh264_real", "deh264_span", "hurrdeblur"],
             "anime1080fixer"), 0, 1)
         lay.addWidget(self._checkbox("Stabilize", "stabilize"), 1, 0)
+        g.register_body()
         return g
 
     def _build_dedup_group(self):
-        g = QGroupBox("Deduplication")
+        g = CollapsibleGroupBox("Deduplication")
         g.setCheckable(True)
         g.setChecked(False)
         g.toggled.connect(lambda v: self.state.update({"dedup": v}))
@@ -219,20 +285,22 @@ class FusionFrameWindow(QMainWindow):
             "ssim"), 0, 1)
         lay.addWidget(QLabel("Sensitivity"), 1, 0)
         lay.addWidget(self._int_spin("dedup_sens", 35, 0, 100), 1, 1)
+        g.register_body()
         return g
 
     def _build_segment_group(self):
-        g = QGroupBox("Segmentation")
+        g = CollapsibleGroupBox("Segmentation")
         g.setCheckable(True)
         g.setChecked(False)
         g.toggled.connect(lambda v: self.state.update({"segment": v}))
         lay = QGridLayout(g)
         lay.addWidget(QLabel("Method"), 0, 0)
         lay.addWidget(self._combo("segment_method", ["anime", "anime-tensorrt"], "anime"), 0, 1)
+        g.register_body()
         return g
 
     def _build_depth_group(self):
-        g = QGroupBox("Depth")
+        g = CollapsibleGroupBox("Depth")
         g.setCheckable(True)
         g.setChecked(False)
         g.toggled.connect(lambda v: self.state.update({"depth": v}))
@@ -245,10 +313,11 @@ class FusionFrameWindow(QMainWindow):
         lay.addWidget(QLabel("Quality"), 1, 0)
         lay.addWidget(self._combo("depth_quality", ["low", "medium", "high"], "low"), 1, 1)
         lay.addWidget(self._checkbox("Depth Norm", "depth_norm"), 2, 0)
+        g.register_body()
         return g
 
     def _build_objdetect_group(self):
-        g = QGroupBox("Object Detection")
+        g = CollapsibleGroupBox("Object Detection")
         g.setCheckable(True)
         g.setChecked(False)
         g.toggled.connect(lambda v: self.state.update({"obj_detect": v}))
@@ -257,20 +326,22 @@ class FusionFrameWindow(QMainWindow):
         lay.addWidget(self._combo("obj_detect_method",
             ["yolov9_small-directml", "yolov9_medium-directml", "yolov9_large-directml"],
             "yolov9_small-directml"), 0, 1)
+        g.register_body()
         return g
 
     def _build_autoclip_group(self):
-        g = QGroupBox("Auto Clip Detection")
+        g = CollapsibleGroupBox("Auto Clip Detection")
         g.setCheckable(True)
         g.setChecked(False)
         g.toggled.connect(lambda v: self.state.update({"autoclip": v}))
         lay = QGridLayout(g)
         lay.addWidget(QLabel("Sensitivity"), 0, 0)
         lay.addWidget(self._float_spin("autoclip_sens", 50.0, 0.0, 100.0, 1.0), 0, 1)
+        g.register_body()
         return g
 
     def _build_export_group(self):
-        g = QGroupBox("Export && Encoding")
+        g = CollapsibleGroupBox("Export && Encoding")
         lay = QGridLayout(g)
         lay.addWidget(self._checkbox("Resize", "resize"), 0, 0)
         lay.addWidget(self._float_spin("resize_factor", 2.0, 0.1, 10.0, 0.1), 0, 1)
@@ -287,10 +358,11 @@ class FusionFrameWindow(QMainWindow):
             "x264"), 2, 1)
         lay.addWidget(QLabel("Custom Encoder"), 3, 0)
         lay.addWidget(self._line_edit("custom_encoder"), 3, 1)
+        g.register_body()
         return g
 
     def _build_advanced_group(self):
-        g = QGroupBox("Advanced")
+        g = CollapsibleGroupBox("Advanced")
         lay = QGridLayout(g)
         lay.addWidget(self._checkbox("Half precision", "half", True), 0, 0)
         lay.addWidget(self._checkbox("Static mode", "static"), 0, 1)
@@ -307,6 +379,7 @@ class FusionFrameWindow(QMainWindow):
         lay.addWidget(self._checkbox("Enable AE", "ae_enable"), 6, 0)
         lay.addWidget(QLabel("AE Host"), 7, 0)
         lay.addWidget(self._line_edit("ae_host", "127.0.0.1:PORT"), 7, 1)
+        g.register_body()
         return g
 
     # ------------------------------------------------------------------
@@ -318,6 +391,10 @@ class FusionFrameWindow(QMainWindow):
         self._log_lines.append(f"{ts} {msg}")
         self.log_box.setPlainText("\n".join(self._log_lines[-200:]))
         self.log_box.verticalScrollBar().setValue(self.log_box.verticalScrollBar().maximum())
+
+    def _clear_log(self):
+        self._log_lines.clear()
+        self.log_box.clear()
 
     def _set_status(self, msg):
         self.status_label.setText(msg)
@@ -350,7 +427,7 @@ class FusionFrameWindow(QMainWindow):
             self._log(f"Failed to grab clip: {meta.get('error')}")
 
     # ------------------------------------------------------------------
-    # Render command construction (unchanged from original)
+    # Render command construction
     # ------------------------------------------------------------------
 
     def _build_command(self):
@@ -446,7 +523,7 @@ class FusionFrameWindow(QMainWindow):
         return args
 
     # ------------------------------------------------------------------
-    # Run / import pipeline (subprocess render, unchanged in spirit)
+    # Run / import pipeline
     # ------------------------------------------------------------------
 
     def _run_process(self):
@@ -463,11 +540,13 @@ class FusionFrameWindow(QMainWindow):
             self._log(f"TAS directory not found: {tas_dir}")
             self._set_status("Error: TAS not found")
             return
-
-        python_exe = os.path.join(tas_dir, "python.exe")
-        if not os.path.isfile(python_exe):
-            self._log(f"TAS Python not found: {python_exe}")
+        if not os.path.isfile(os.path.join(tas_dir, "python.exe")):
+            self._log(f"TAS Python not found in {tas_dir}")
             self._set_status("Error: TAS Python not found")
+            return
+        if not os.path.isfile(os.path.join(tas_dir, "main.py")):
+            self._log(f"TAS main.py not found in {tas_dir}")
+            self._set_status("Error: TAS main.py not found")
             return
 
         base, ext = os.path.splitext(os.path.basename(src))
@@ -479,13 +558,13 @@ class FusionFrameWindow(QMainWindow):
         self._log(f'[Run] python.exe main.py --input "{src}" --output "{out_path}" {args_str}')
 
         try:
-            popen_kwargs = {}
-            if os.name == "nt":
-                popen_kwargs["creationflags"] = subprocess.CREATE_NEW_CONSOLE
+            python_exe = os.path.join(tas_dir, "python.exe")
+            env = os.environ.copy()
+            env["PYTHONUNBUFFERED"] = "1"
             proc = subprocess.Popen(
-                [python_exe, os.path.join(tas_dir, "main.py"),
-                 "--input", src, "--output", out_path] + cmd_args,
-                cwd=tas_dir, **popen_kwargs,
+                [python_exe, "main.py", "--input", src, "--output", out_path] + cmd_args,
+                cwd=tas_dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                env=env,
             )
             self._set_status("TAS running...")
             threading.Thread(target=self._monitor_process, args=(proc, out_path), daemon=True).start()
@@ -494,19 +573,46 @@ class FusionFrameWindow(QMainWindow):
             self._log(f"Run failed: {e}")
 
     def _monitor_process(self, proc, out_path):
+        lines = []
+        buf = b""
+        while True:
+            chunk = proc.stdout.read1(4096)
+            if not chunk:
+                break
+            buf += chunk
+            # tqdm/rich progress bars overwrite the line with \r instead of
+            # \n, so split on either delimiter for real-time updates.
+            while True:
+                idx_r = buf.find(b"\r")
+                idx_n = buf.find(b"\n")
+                candidates = [i for i in (idx_r, idx_n) if i != -1]
+                if not candidates:
+                    break
+                idx = min(candidates)
+                raw_line, buf = buf[:idx], buf[idx + 1:]
+                line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
+                if line:
+                    lines.append(line)
+                    self.signals.tas_output.emit(f"[TAS] {line}")
+        if buf:
+            line = buf.decode("utf-8", errors="replace").rstrip("\r\n")
+            if line:
+                lines.append(line)
+                self.signals.tas_output.emit(f"[TAS] {line}")
+
         proc.wait()
-        time.sleep(1)
-        if proc.returncode != 0:
-            self.signals.process_finished.emit(
-                {"ok": False, "path": "", "error": f"TAS exited with code {proc.returncode}"}
-            )
-        else:
-            self.signals.process_finished.emit({"ok": True, "path": out_path, "error": ""})
+        out = "\n".join(lines)
+        ok = proc.returncode == 0 and os.path.isfile(out_path)
+        self.signals.process_finished.emit({
+            "ok": ok,
+            "path": out_path if ok else "",
+            "error": "" if ok else f"TAS exited code {proc.returncode}\n{out}",
+        })
 
     def _on_process_finished(self, result):
+        self._set_status("TAS failed" if not result["ok"] else "TAS finished")
         if not result["ok"]:
             self._log(f"[TAS] {result['error']}")
-            self._set_status("TAS failed")
             return
 
         out_path = result["path"]
@@ -515,7 +621,6 @@ class FusionFrameWindow(QMainWindow):
         if not self._clip_details:
             self._log("[Import] No clip details cached (grab a clip first)")
             return
-
         if not os.path.isfile(out_path):
             self._log(f"[Import] Output file not found: {out_path}")
             return
@@ -527,7 +632,8 @@ class FusionFrameWindow(QMainWindow):
         try:
             err = core.import_and_align_clip(
                 self.resolve, fp, self._clip_details,
-                add_red=self.state["add_red"], import_on_top=self.state["import_on_top"],
+                add_red=self.state["add_red"], add_orange=self.state["add_orange"],
+                import_on_top=self.state["import_on_top"],
             )
             if err:
                 self.signals.import_done.emit(f"[Import] Failed to import rendered clip: {err}", False)
