@@ -57,7 +57,7 @@ def _check_src(src):
     return (Path(src) / "fusion_frame" / "__init__.py").is_file()
 
 
-PLUGIN_SRC = r"C:\Users\Time\Downloads\fusion_frame (1)\fusion_frame\src"
+PLUGIN_SRC = r"C:\Users\username\a_custom_folder\fusion_frame\src"
 
 if not _check_src(PLUGIN_SRC):
     ret = _msgbox(
