@@ -1,13 +1,4 @@
-"""
-PySide6 window for Fusion Frame.
 
-This is a port of the original dearpygui GUI. All the same controls and
-the same external-render workflow (launch TheAnimeScripter as a subprocess,
-then re-import the result into Resolve) are preserved. The only thing that
-changed is how it talks to Resolve: instead of connecting via
-DaVinciResolveScript.scriptapp() (blocked on Free), it uses the `resolve`
-object handed to it by the bridge script, which Resolve injects.
-"""
 import os
 import subprocess
 import threading
