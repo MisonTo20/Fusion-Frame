@@ -1,25 +1,3 @@
-"""
-Resolve API logic for Fusion Frame.
-
-Free-version note
-------------------
-On DaVinci Resolve Free, `DaVinciResolveScript.scriptapp("Resolve")` always
-returns None when called from an external/standalone Python process. There
-is no workaround for that.
-
-The only thing that works on Free is letting Resolve itself launch a script
-from Scripts -> Comp (or Scripts -> Utility), which injects a live `app`
-(Fusion) object into that script. From `app.GetResolve()` you get a working
-`Resolve` object with full access to the Project Manager, Media Pool, and
-Timeline API -- the same object your code used to try to obtain via
-scriptapp().
-
-Every function below therefore takes `resolve` as an explicit argument
-instead of fetching it internally. The bridge script obtains it once
-(via `app.GetResolve()`) and passes it down. Nothing in this module ever
-calls scriptapp() or imports DaVinciResolveScript.
-"""
-
 
 def get_current_clip_metadata(resolve):
     """
