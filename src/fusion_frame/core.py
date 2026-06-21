@@ -1,9 +1,5 @@
-
 def get_current_clip_metadata(resolve):
-    """
-    Returns metadata about the clip under the playhead on the current
-    timeline, or {"success": False, "error": ...} if anything is missing.
-    """
+    """Return metadata for the clip under the playhead on the current timeline."""
     try:
         if not resolve:
             return {"success": False, "error": "No connection to Resolve. Run this from Scripts > Comp."}
@@ -19,6 +15,7 @@ def get_current_clip_metadata(resolve):
         item = timeline.GetCurrentVideoItem()
         if not item:
             return {"success": False, "error": "No video clip under playhead"}
+
         clip_name = item.GetName() or "Unnamed"
         start = item.GetStart()
         duration = item.GetDuration()
@@ -27,12 +24,12 @@ def get_current_clip_metadata(resolve):
             framerate = float(project.GetSetting("timelineFrameRate") or 24.0)
         except ValueError:
             framerate = 24.0
+
         mp_item = item.GetMediaPoolItem()
-        source_path = ""
-        if mp_item:
-            source_path = mp_item.GetClipProperty("File Path") or ""
+        source_path = mp_item.GetClipProperty("File Path") or "" if mp_item else ""
         if not source_path:
             return {"success": False, "error": f"Clip '{clip_name}' has no source file path"}
+
         return {
             "success": True,
             "clip_name": clip_name,
@@ -54,9 +51,7 @@ def get_project_path(resolve):
         if not pm:
             return None
         project = pm.GetCurrentProject()
-        if not project:
-            return None
-        return project.GetProjectPath()
+        return project.GetProjectPath() if project else None
     except Exception:
         return None
 
@@ -65,20 +60,19 @@ def _find_item_track(timeline, name, start, duration):
     count = timeline.GetTrackCount("video")
     for i in range(1, count + 1):
         items = timeline.GetItemListInTrack("video", i)
-        if items:
-            for item in items:
-                if item.GetName() == name and item.GetStart() == start and item.GetDuration() == duration:
-                    return i
+        if not items:
+            continue
+        for item in items:
+            if item.GetName() == name and item.GetStart() == start and item.GetDuration() == duration:
+                return i
     return None
 
 
 def import_and_align_clip(resolve, file_path, clip_details, **kwargs):
     """
-    Imports file_path into the Media Pool, appends it to the timeline,
-    then repositions/resizes it to sit exactly where the original clip
-    (described by clip_details) was, on a track above (or below) it.
-
-    Returns None on success, or an error string.
+    Import file_path into the Media Pool, append it to the timeline, then
+    reposition/resize it to match the original clip described by clip_details,
+    on a track above (or below) it. Returns None on success, else an error string.
     """
     if not resolve:
         return "No connection to Resolve. Run this from Scripts > Comp."
@@ -95,6 +89,7 @@ def import_and_align_clip(resolve, file_path, clip_details, **kwargs):
     mp = project.GetMediaPool()
     if not mp:
         return "Could not access Media Pool"
+
     try:
         imported_items = mp.ImportMedia([file_path])
     except Exception as e:
@@ -112,8 +107,7 @@ def import_and_align_clip(resolve, file_path, clip_details, **kwargs):
     if current_track is None:
         return "Could not locate current clip on timeline"
 
-    import_on_top = kwargs.get('import_on_top', True)
-    if import_on_top:
+    if kwargs.get("import_on_top", True):
         target_track = current_track - 1
         if target_track < 1:
             timeline.AddTrack("video")
@@ -139,7 +133,7 @@ def import_and_align_clip(resolve, file_path, clip_details, **kwargs):
         new_item.SetDuration(clip_details.get("duration", 0))
         if target_track != current_track:
             timeline.MoveClip(new_item, "video", target_track)
-        if kwargs.get('add_red', True):
+        if kwargs.get("add_red", True):
             try:
                 timeline.SetTrackColor("video", target_track, "Red")
             except Exception:
@@ -150,14 +144,12 @@ def import_and_align_clip(resolve, file_path, clip_details, **kwargs):
             pass
     except Exception as e:
         return f"Failed to align imported clip: {e}"
+
     return None
 
 
 def verify_resolve(resolve):
-    """
-    Standard guard used before any operation that touches Resolve.
-    Returns (project, error_str_or_None).
-    """
+    """Standard guard used before any operation that touches Resolve."""
     if resolve is None:
         return None, "Open this plugin from Scripts > Comp in Resolve."
     try:
